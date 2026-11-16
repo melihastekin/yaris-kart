@@ -1,0 +1,99 @@
+<meta charset="utf-8">
+<title>Fırtına Kart</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- Telefonda sayfanın ekrana tam oturması ve parmakla büyütülmemesi için -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<!--
+  FIRTINA KART - SAYFA DOSYASI
+  Oyunu açmak için bu dosyaya çift tıkla. Bu dosya sadece ekrandaki kutuların
+  iskeletini tutar. Asıl işi yapan iki dosya daha var ve üçü AYNI KLASÖRDE durmalı:
+    stil.css  -> görünüm (renkler, yazı tipleri, kutuların yeri)
+    oyun.js   -> oyunun bütün mantığı (pist, kartlar, fizik, rakipler, eşyalar)
+-->
+
+<!-- Yazı tipi (internetten yüklenir) ve görünüm dosyası -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,600;0,800;1,800;1,900&display=swap">
+<link rel="stylesheet" href="stil.css">
+
+<!-- Oyunun 3 boyutlu görüntüsü bu alana çizilir -->
+<canvas id="game"></canvas>
+
+<!-- Yarış göstergeleri: sıra, tur, süre, eşya kutusu, mini harita, hız -->
+<div id="hud" hidden>
+  <div class="tl stroke">
+    <div id="pos"><span id="posN">8</span><small>/8</small></div>
+    <div id="lap">TUR 1/3</div>
+    <div id="time">0:00.00</div>
+  </div>
+  <div id="item"><div id="itemIcon"></div><span id="itemKey">E</span></div>
+  <canvas id="map" width="320" height="320"></canvas>
+  <div id="msg" class="stroke"></div>
+  <div id="wrong" hidden>TERS YÖN</div>
+  <!-- Alt orta: eğim göstergesi (telefonu eğerek sürerken görünür) ve hız -->
+  <div class="bc">
+    <div id="tilt" hidden><i id="tiltDot"></i></div>
+    <div id="speed" class="stroke"><b id="spd">0</b> km/sa</div>
+  </div>
+</div>
+
+<!-- Telefon dik tutulursa çıkan uyarı -->
+<div id="rotate" hidden><div><b>Telefonu yan çevir</b><span>Oyun yatay ekranda oynanır</span></div></div>
+
+<!-- Dokunmatik tuşlar: sadece telefon ve tablette görünür -->
+<div id="touch" hidden>
+  <div class="grp"><button id="tL" aria-label="Sola">◀</button><button id="tR" aria-label="Sağa">▶</button></div>
+  <div class="grp"><button id="tB" class="sm">FREN</button><button id="tI" class="sm">EŞYA</button><button id="tD">DRIFT</button></div>
+</div>
+
+<!-- Ana menü. Buradaki yazıları değiştirerek oyunun adını ve açıklamaları değiştirebilirsin -->
+<div id="menu" class="overlay">
+  <div class="card">
+    <!-- Sol bölüm: oyunun adı ve nasıl oynanır -->
+    <div class="colA">
+      <h1><span>FIRTINA</span><em>KART</em></h1>
+      <p class="sub">Ada Kupası · 3 tur · 8 yarışçı</p>
+      <!-- Telefonda görünen açıklama -->
+      <dl class="keys tips-touch">
+        <dt>Eğ</dt><dd>Telefonu yatay tut, direksiyon gibi sağa sola eğ</dd>
+        <dt>Gaz</dt><dd>Kendiliğinden basılı. Yavaşlamak için FREN</dd>
+        <dt>DRIFT</dt><dd>Virajda basılı tut, kıvılcım renk değiştirince bırak, turbo al</dd>
+        <dt>EŞYA</dt><dd>Elindeki eşyayı kullanır</dd>
+      </dl>
+      <!-- Bilgisayarda görünen açıklama -->
+      <dl class="keys tips-keys">
+        <dt>W S / ↑ ↓</dt><dd>Gaz ve fren</dd>
+        <dt>A D / ← →</dt><dd>Direksiyon</dd>
+        <dt>Boşluk</dt><dd>Drift. Virajda basılı tut, kıvılcım renk değiştirince bırak, turbo al</dd>
+        <dt>E</dt><dd>Eşyayı kullan</dd>
+        <dt>R · P · M</dt><dd>Piste dön · Duraklat · Ses</dd>
+      </dl>
+    </div>
+    <!-- Sağ bölüm: seçenekler ve başla tuşu -->
+    <div class="colB">
+      <!-- Renk düğmeleri oyun.js içindeki PCOLS listesinden otomatik eklenir -->
+      <div class="row"><span class="lbl">Kartın</span><div id="colors" class="opts"></div></div>
+      <div class="row"><span class="lbl">Zorluk</span><div id="diffs" class="opts">
+        <button id="d0" data-d="0">Kolay</button><button id="d1" data-d="1" aria-pressed="true">Orta</button><button id="d2" data-d="2">Zor</button>
+      </div></div>
+      <!-- Sadece telefon ve tablette görünür -->
+      <div class="row" id="steerRow" hidden><span class="lbl">Sürüş</span><div id="steers" class="opts">
+        <button id="s0" data-s="tilt" aria-pressed="true">Telefonu eğ</button><button id="s1" data-s="btn">Ok tuşları</button>
+      </div></div>
+      <button id="start" class="go">YARIŞA BAŞLA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Yarış sonu ekranı: sıralama listesini oyun.js doldurur -->
+<div id="results" class="overlay" hidden>
+  <div class="card">
+    <h2 id="resTitle">Yarış bitti</h2>
+    <ol id="resList"></ol>
+    <p id="best"></p>
+    <div class="btns"><button id="again" class="go">TEKRAR YARIŞ</button><button id="toMenu" class="ghost">Menü</button></div>
+  </div>
+</div>
+
+<!-- Önce 3 boyutlu çizim kütüphanesi (three.js), sonra oyunun kendi kodu yüklenir -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="oyun.js"></script>

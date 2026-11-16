@@ -1,0 +1,278 @@
+/* =====================================================================
+   FIRTINA KART - GÖRÜNÜM DOSYASI
+   =====================================================================
+   Bu dosya oyunun 3 boyutlu kısmını DEĞİL, üstündeki yazıları ve kutuları
+   biçimlendirir: menü, sıra/tur/süre göstergeleri, eşya kutusu, sonuç ekranı,
+   dokunmatik tuşlar.
+
+   Yerleşim: 3B pist bütün ekranı kaplar, göstergeler köşelere tutturulur,
+   menü ise soldaki bir kart kutusunda durur.
+   ===================================================================== */
+
+/* ---------- Renkler ve yazı tipi ----------
+   Bütün renkler burada bir kez tanımlanır, aşağıda var(--isim) ile kullanılır.
+   Bir rengi buradan değiştirirsen her yerde değişir. */
+:root {
+  --ink: #0e2238;     /* koyu lacivert: kutu zeminleri, yazı kenarları */
+  --ink-2: #1a3d66;   /* açık lacivert: düğmeler, liste satırları */
+  --paper: #fff6e0;   /* krem: ana yazı rengi */
+  --hot: #ff4a2b;     /* turuncu-kırmızı: gölgeler, uyarılar */
+  --sun: #ffc61a;     /* sarı: vurgular, sıra numarası, başla tuşu */
+  --sea: #27a4e0;     /* mavi: alt başlıklar */
+  --display: 'Exo 2', 'Trebuchet MS', system-ui, sans-serif; /* yazı tipi */
+  color-scheme: dark;
+}
+
+/* "hidden" verilen elemanlar görünmez (menü ve göstergeler bununla açılıp kapanır). */
+[hidden] { display: none !important; }
+
+/* ---------- Sayfanın geneli ---------- */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--display);
+  font-weight: 600;
+  overflow: hidden;            /* sayfa kaymasın */
+  touch-action: none;          /* telefonda parmakla sayfa oynamasın */
+  -webkit-user-select: none;
+  user-select: none;           /* yazılar fareyle seçilmesin */
+}
+
+/* Oyunun çizildiği alan: bütün ekran. */
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* Yazıların etrafına koyu kenarlık (her zeminde okunsun diye). */
+.stroke {
+  text-shadow: 0 3px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink),
+               0 -2px 0 var(--ink), 2px 2px 0 var(--ink), -2px 2px 0 var(--ink);
+}
+
+/* ---------- Yarış göstergeleri (HUD) ----------
+   Ekran 3 sütun, 3 satırlık bir ızgaraya bölünür:
+   sol üst = sıra/tur/süre, orta üst = eşya, sağ üst = harita,
+   orta = büyük mesaj, alt orta = hız. */
+#hud {
+  position: fixed; inset: 0;
+  pointer-events: none;        /* tıklamalar oyuna geçsin */
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+}
+
+/* Sol üst: sıra, tur, süre. */
+.tl { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+#pos { font-style: italic; font-weight: 900; font-size: clamp(44px, 9vw, 84px); line-height: .9; color: var(--sun); }
+#pos small { font-size: .38em; color: var(--paper); margin-left: 4px; }
+#lap, #time {
+  font-style: italic; font-weight: 800;
+  font-size: clamp(15px, 2.6vw, 22px);
+  font-variant-numeric: tabular-nums;  /* rakamlar eşit genişlikte, süre titremesin */
+  letter-spacing: .03em;
+}
+
+/* Orta üst: eşya kutusu. */
+#item {
+  grid-column: 2; grid-row: 1; justify-self: center;
+  width: clamp(58px, 10vw, 84px); aspect-ratio: 1;
+  background: rgba(14, 34, 56, .72);
+  border: 3px solid var(--paper); border-radius: 14px;
+  position: relative; display: grid; place-items: center;
+}
+#itemIcon { width: 74%; height: 74%; }
+#itemIcon svg { width: 100%; height: 100%; display: block; }
+/* Eşya kutusunun köşesindeki küçük "E" tuşu etiketi. */
+#itemKey {
+  position: absolute; right: -9px; bottom: -9px;
+  background: var(--sun); color: var(--ink);
+  font-weight: 900; font-size: 13px;
+  border-radius: 6px; padding: 1px 6px; border: 2px solid var(--ink);
+}
+
+/* Sağ üst: mini harita. */
+#map { grid-column: 3; grid-row: 1; justify-self: end; width: clamp(96px, 17vw, 160px); height: auto; aspect-ratio: 1; }
+
+/* Ortadaki büyük mesaj ("3", "BAŞLA!", "SON TUR!"). */
+#msg {
+  grid-column: 1 / -1; grid-row: 2; align-self: center; justify-self: center;
+  text-align: center; font-style: italic; font-weight: 900;
+  font-size: clamp(40px, 11vw, 120px); color: var(--paper); line-height: 1;
+}
+#msg.small { font-size: clamp(18px, 4vw, 34px); }  /* uzun bilgi mesajları küçük yazılır */
+/* Mesaj belirirken büyükten küçüğe "pat" diye gelir. */
+#msg.pop { animation: pop .35s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { from { transform: scale(1.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* "TERS YÖN" uyarısı. */
+#wrong {
+  grid-column: 1 / -1; grid-row: 2; align-self: start; justify-self: center;
+  margin-top: 6vh;
+  background: var(--hot); color: var(--paper);
+  font-style: italic; font-weight: 900; font-size: clamp(18px, 3.4vw, 30px);
+  padding: 4px 18px; border: 3px solid var(--ink); border-radius: 8px;
+}
+
+/* Alt orta: eğim göstergesi ve hız üst üste durur. */
+.bc { grid-column: 2; grid-row: 3; justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+/* Eğim göstergesi: sarı nokta telefonu eğdiğin yöne kayar. */
+#tilt { width: 130px; height: 10px; border-radius: 5px; background: rgba(14, 34, 56, .72); border: 2px solid var(--paper); position: relative; }
+#tiltDot { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--sun); border: 2px solid var(--ink); }
+#speed { font-style: italic; font-weight: 800; font-size: 15px; letter-spacing: .04em; }
+
+/* ---------- "Telefonu yan çevir" uyarısı ---------- */
+#rotate {
+  position: fixed; inset: 0; z-index: 5;
+  display: grid; place-items: center; text-align: center;
+  background: var(--ink);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+#rotate b { display: block; font-style: italic; font-weight: 900; font-size: 30px; color: var(--sun); }
+#rotate span { display: block; margin-top: 8px; font-size: 15px; }
+#speed b {
+  font-size: 30px; font-weight: 900; color: var(--sun);
+  font-variant-numeric: tabular-nums;
+  display: inline-block; min-width: 2.2ch; text-align: right;
+}
+
+/* ---------- Dokunmatik tuşlar (sadece telefon ve tablette görünür) ---------- */
+#touch {
+  position: fixed; inset: auto 0 0 0;
+  display: flex; justify-content: space-between; align-items: flex-end;
+  pointer-events: none;
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+#touch .grp { display: flex; gap: 12px; align-items: flex-end; }
+#touch button {
+  pointer-events: auto; touch-action: none;
+  width: 74px; height: 74px; border-radius: 50%;
+  border: 3px solid var(--paper);
+  background: rgba(14, 34, 56, .6); color: var(--paper);
+  font: 900 italic 15px var(--display);
+}
+#touch button {
+  -webkit-touch-callout: none;                 /* uzun basınca menü çıkmasın */
+  -webkit-tap-highlight-color: transparent;    /* dokununca gri parlama olmasın */
+}
+#touch button.on { background: var(--sun); color: var(--ink); }  /* basılıyken sarı */
+#touch .sm { width: 58px; height: 58px; font-size: 12px; }       /* küçük tuşlar */
+#touch #tD { width: 88px; height: 88px; font-size: 17px; }       /* DRIFT en çok kullanılan tuş, en büyüğü */
+
+/* ---------- Menü ve sonuç ekranı ----------
+   .overlay bütün ekranı kaplayan katman, .card içindeki kutudur. */
+.overlay {
+  position: fixed; inset: 0;
+  display: flex; align-items: center;
+  overflow-y: auto; touch-action: pan-y;
+  padding-block: max(20px, env(safe-area-inset-top, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(90deg, rgba(14, 34, 56, .62), rgba(14, 34, 56, 0) 75%); /* solda koyulaşan perde */
+}
+.card {
+  width: 100%; max-width: 420px;
+  margin: auto 0; margin-left: clamp(0px, 5vw, 72px);
+  background: rgba(14, 34, 56, .9);
+  border: 3px solid var(--paper); border-radius: 6px;
+  box-shadow: 8px 8px 0 var(--hot);  /* çıkartma gibi duran kırmızı gölge */
+  padding: 22px 22px 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+/* Kartın iki bölümü: A (ad ve açıklama), B (seçenekler ve başla tuşu).
+   Normalde alt alta durur ve açıklama listesi en alta gider. */
+.colA, .colB { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card > .colA, .card > .colB { display: contents; }
+.card .keys { order: 9; }
+
+/* Açıklamanın hangisi görünsün: bilgisayarda klavye tuşları, telefonda dokunmatik anlatım. */
+.keys.tips-touch { display: none; }
+@media (pointer: coarse) {
+  .keys.tips-touch { display: grid; }
+  .keys.tips-keys { display: none; }
+}
+
+/* Oyunun adı. */
+h1 { margin: 0; font-style: italic; font-weight: 900; font-size: clamp(40px, 11vw, 62px); line-height: .88; letter-spacing: -.01em; text-wrap: balance; }
+h1 span { display: block; color: var(--paper); }
+h1 em { display: block; color: var(--sun); font-size: 1.32em; }
+/* Sonuç ekranı başlığı. */
+h2 { margin: 0; font-style: italic; font-weight: 900; font-size: 34px; color: var(--sun); line-height: 1; text-wrap: balance; }
+/* Alt başlık ("Ada Kupası · 3 tur · 8 yarışçı"). */
+.sub { margin: 0; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: var(--sea); }
+
+/* Menüdeki seçenek satırları (Kartın, Zorluk). */
+.row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.lbl { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; width: 64px; opacity: .85; }
+.opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.opts button {
+  font: 800 14px var(--display); color: var(--paper);
+  background: var(--ink-2); border: 2px solid transparent; border-radius: 6px;
+  padding: 8px 14px; cursor: pointer;
+}
+.opts button.sw { width: 40px; height: 40px; padding: 0; border-radius: 50%; }                   /* yuvarlak renk düğmesi */
+.opts button[aria-pressed="true"] { border-color: var(--paper); box-shadow: 0 0 0 3px var(--sun); } /* seçili olan */
+
+/* Büyük sarı tuş ("YARIŞA BAŞLA", "TEKRAR YARIŞ"). */
+.go {
+  font: 900 italic 22px var(--display); letter-spacing: .03em;
+  color: var(--ink); background: var(--sun);
+  border: 3px solid var(--ink); border-radius: 8px;
+  padding: 13px 18px; cursor: pointer;
+  box-shadow: 0 5px 0 var(--hot);
+}
+.go:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--hot); } /* basınca içeri göçer */
+/* Sade ikinci tuş ("Menü"). */
+.ghost {
+  font: 800 14px var(--display); color: var(--paper);
+  background: none; border: 2px solid var(--ink-2); border-radius: 6px;
+  padding: 9px 14px; cursor: pointer;
+}
+/* Klavyeyle gezinirken hangi tuşun seçili olduğu belli olsun. */
+button:focus-visible { outline: 3px solid var(--sea); outline-offset: 3px; }
+
+/* Menüdeki tuş açıklamaları listesi. */
+.keys { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; font-size: 13.5px; line-height: 1.35; }
+.keys dt { color: var(--sun); font-weight: 800; white-space: nowrap; }
+.keys dd { margin: 0; min-width: 0; }
+
+/* Sonuç listesi. Oyuncunun satırı (.me) sarı olur. */
+#resList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-variant-numeric: tabular-nums; }
+#resList li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; padding: 6px 10px; border-radius: 5px; background: var(--ink-2); font-size: 15px; }
+#resList li.me { background: var(--sun); color: var(--ink); font-weight: 800; }
+#resList i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; border: 1.5px solid var(--paper); } /* kart rengi noktası */
+#best { margin: 0; font-size: 14px; color: var(--sea); }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* Hareket azaltma ayarı açık olan cihazlarda mesaj animasyonu kapanır. */
+@media (prefers-reduced-motion: reduce) { #msg.pop { animation: none; } }
+
+/* ---------- Yatay tutulan telefon (ekran kısa ve geniş) ----------
+   Menü kartı iki sütuna bölünür ve her şey biraz küçülür ki kaydırmadan
+   ekrana sığsın. Bu blok dosyanın sonunda durmalı; yukarıdaki kuralları ezer. */
+@media (max-height: 520px) and (min-width: 560px) {
+  .card {
+    max-width: 720px; margin-left: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: center;
+    padding: 14px 18px;
+  }
+  .card > .colA, .card > .colB { display: flex; gap: 10px; }
+  .card .keys { order: 0; font-size: 12.5px; gap: 3px 10px; }
+  h1 { font-size: 40px; }
+  .sub { font-size: 12px; }
+  .lbl { width: 54px; font-size: 11px; }
+  .opts button { padding: 7px 11px; font-size: 13px; }
+  .opts button.sw { width: 34px; height: 34px; }
+  .go { font-size: 19px; padding: 10px 14px; }
+  /* Yarış göstergeleri de kısa ekranda biraz küçülür. */
+  #pos { font-size: 52px; }
+  #item { width: 56px; }
+  #map { width: 104px; }
+}
