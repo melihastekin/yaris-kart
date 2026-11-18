@@ -33,6 +33,7 @@
      PCOLS     -> oyuncunun seçebileceği renkler
      AIS       -> rakiplerin adları ve renkleri
      TILT_FULL -> telefonu eğerek sürerken direksiyonun hassasiyeti
+     TILT_CURVE / TILT_SMOOTH -> eğerek sürüşün yumuşaklığı
    ===================================================================== */
 
 (function () {
@@ -976,9 +977,11 @@
     const right = keys.ArrowRight || keys.KeyD || touch.right;
     let steer = (left ? 1 : 0) - (right ? 1 : 0); // 1 sol, -1 sağ
     // Tuşa basılmıyorsa ve telefon eğme açıksa direksiyonu telefonun eğimi belirler.
-    if (!steer && tiltActive()) steer = tilt.value;
+    const tilting = !steer && tiltActive();
+    if (tilting) steer = tilt.value;
     return {
       steer,
+      tilt: tilting,
       gas: keys.ArrowUp || keys.KeyW || touch.auto,
       brake: keys.ArrowDown || keys.KeyS || touch.brake,
       drift: !!(keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.drift)
@@ -997,8 +1000,10 @@
      Önemli: tarayıcılar hareket sensörünü sadece güvenli (https) adreslerde açar.
      Bilgisayardaki dosyayı telefona kopyalayıp açınca ya da claude.ai sayfasında
      sensör çalışmaz; o durumda oyun kendiliğinden ekrandaki ok tuşlarına döner. */
-  const TILT_FULL = 22; // direksiyonun sonuna kadar kırılması için gereken eğim (derece). Küçültürsen daha hassas olur.
-  const TILT_DEAD = 2;  // bu kadar küçük eğimler yok sayılır (el titremesi için)
+  const TILT_FULL = 32;   // direksiyonun sonuna kadar kırılması için gereken eğim (derece). Küçültürsen daha hassas olur.
+  const TILT_DEAD = 3;    // bu kadar küçük eğimler yok sayılır (el titremesi için)
+  const TILT_CURVE = 1.6; // 1 = düz tepki; büyüdükçe küçük eğimler daha yumuşak, büyük eğimler yine tam dönüş
+  const TILT_SMOOTH = 5;  // eğerek sürerken direksiyonun dönme hızı (tuşlarda 9). Küçültürsen daha yumuşak olur.
 
   const tilt = {
     want: isTouch,     // oyuncu eğerek sürmek istiyor mu (menüden seçilir)
@@ -1035,7 +1040,8 @@
     }
     const deg = Math.asin(clamp(s, -1, 1)) * 180 / Math.PI; // eğim açısı (derece)
     const a = Math.abs(deg);
-    tilt.value = a < TILT_DEAD ? 0 : Math.sign(deg) * Math.min(1, (a - TILT_DEAD) / (TILT_FULL - TILT_DEAD));
+    const x = a < TILT_DEAD ? 0 : Math.min(1, (a - TILT_DEAD) / (TILT_FULL - TILT_DEAD));
+    tilt.value = Math.sign(deg) * Math.pow(x, TILT_CURVE);
     tilt.lastT = performance.now();
     if (!tilt.on) {
       tilt.on = true;
@@ -1383,7 +1389,7 @@
 
     // --- Direksiyon ---
     // Direksiyon tuşa basınca birden değil, yumuşakça döner.
-    k.steerS += (inp.steer - k.steerS) * Math.min(1, dt * (k.isPlayer ? 9 : 14));
+    k.steerS += (inp.steer - k.steerS) * Math.min(1, dt * (inp.tilt ? TILT_SMOOTH : k.isPlayer ? 9 : 14));
     // Çok yavaşken dönüş zayıflar; geri giderken yön tersine döner.
     const speedFactor = clamp(Math.abs(k.speed) / 10, 0, 1) * (k.speed < 0 ? -1 : 1);
     let turn = k.steerS * k.turn;
