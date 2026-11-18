@@ -13,12 +13,13 @@
    Bütün renkler burada bir kez tanımlanır, aşağıda var(--isim) ile kullanılır.
    Bir rengi buradan değiştirirsen her yerde değişir. */
 :root {
-  --ink: #0e2238;     /* koyu lacivert: kutu zeminleri, yazı kenarları */
-  --ink-2: #1a3d66;   /* açık lacivert: düğmeler, liste satırları */
-  --paper: #fff6e0;   /* krem: ana yazı rengi */
-  --hot: #ff4a2b;     /* turuncu-kırmızı: gölgeler, uyarılar */
-  --sun: #ffc61a;     /* sarı: vurgular, sıra numarası, başla tuşu */
-  --sea: #27a4e0;     /* mavi: alt başlıklar */
+  --ink: #17130f;     /* is karası: kutu zeminleri, yazı kenarları */
+  --ink-2: #2e2620;   /* koyu pas: düğmeler, liste satırları */
+  --paper: #e9e1d3;   /* kirli beyaz: ana yazı rengi */
+  --hot: #b8420e;     /* pas kırmızısı: gölgeler, uyarılar */
+  --sun: #f0a30a;     /* tehlike sarısı: vurgular, sıra numarası, başla tuşu */
+  --sea: #9aa3a0;     /* çelik grisi: alt başlıklar */
+  --blood: #d6261a;   /* kan kırmızısı: kritik zırh, hasar parlaması */
   --display: 'Exo 2', 'Trebuchet MS', system-ui, sans-serif; /* yazı tipi */
   color-scheme: dark;
 }
@@ -81,8 +82,8 @@ body {
 #item {
   grid-column: 2; grid-row: 1; justify-self: center;
   width: clamp(58px, 10vw, 84px); aspect-ratio: 1;
-  background: rgba(14, 34, 56, .72);
-  border: 3px solid var(--paper); border-radius: 14px;
+  background: rgba(23, 19, 15, .78);
+  border: 3px solid var(--sea); border-radius: 4px;
   position: relative; display: grid; place-items: center;
 }
 #itemIcon { width: 74%; height: 74%; }
@@ -118,10 +119,43 @@ body {
   padding: 4px 18px; border: 3px solid var(--ink); border-radius: 8px;
 }
 
+/* Sol üst, sürenin altında: zırh çubuğu. */
+#hp { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+#hp b { font-size: 12px; font-weight: 900; letter-spacing: .1em; color: var(--sea); }
+#hp span {
+  width: clamp(110px, 18vw, 170px); height: 12px;
+  background: rgba(23, 19, 15, .8); border: 2px solid var(--sea); border-radius: 2px;
+  overflow: hidden; display: block;
+}
+#hpFill { display: block; height: 100%; width: 100%; background: var(--sun); transition: width .15s; }
+#hp.low #hpFill { background: var(--hot); }
+#hp.crit #hpFill { background: var(--blood); animation: blink .5s steps(2) infinite; }
+#hp.crit b { color: var(--blood); }
+@keyframes blink { 50% { opacity: .35; } }
+
+/* Sağda, haritanın altında: olay akışı ("Bora parçalandı"). */
+#feed {
+  grid-column: 3; grid-row: 2; align-self: start; justify-self: end;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+#feed div {
+  background: rgba(23, 19, 15, .8); border-left: 4px solid var(--hot);
+  padding: 3px 10px; font-size: 14px; font-weight: 800; font-style: italic;
+  animation: feedIn .25s ease-out;
+}
+#feed div.mine { border-left-color: var(--sun); color: var(--sun); }
+@keyframes feedIn { from { transform: translateX(30px); opacity: 0; } }
+
+/* Hasar alınca ekran kenarlarında kırmızı parlama (opaklığını oyun.js ayarlar). */
+#hurt {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(214, 38, 26, 0) 55%, rgba(214, 38, 26, .55) 100%);
+}
+
 /* Alt orta: eğim göstergesi ve hız üst üste durur. */
 .bc { grid-column: 2; grid-row: 3; justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 /* Eğim göstergesi: sarı nokta telefonu eğdiğin yöne kayar. */
-#tilt { width: 130px; height: 10px; border-radius: 5px; background: rgba(14, 34, 56, .72); border: 2px solid var(--paper); position: relative; }
+#tilt { width: 130px; height: 10px; border-radius: 5px; background: rgba(23, 19, 15, .78); border: 2px solid var(--paper); position: relative; }
 #tiltDot { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--sun); border: 2px solid var(--ink); }
 #speed { font-style: italic; font-weight: 800; font-size: 15px; letter-spacing: .04em; }
 
@@ -155,7 +189,7 @@ body {
   pointer-events: auto; touch-action: none;
   width: 74px; height: 74px; border-radius: 50%;
   border: 3px solid var(--paper);
-  background: rgba(14, 34, 56, .6); color: var(--paper);
+  background: rgba(23, 19, 15, .6); color: var(--paper);
   font: 900 italic 15px var(--display);
 }
 #touch button {
@@ -175,14 +209,17 @@ body {
   padding-block: max(20px, env(safe-area-inset-top, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  background: linear-gradient(90deg, rgba(14, 34, 56, .62), rgba(14, 34, 56, 0) 75%); /* solda koyulaşan perde */
+  background: linear-gradient(90deg, rgba(10, 8, 6, .75), rgba(10, 8, 6, 0) 75%); /* solda koyulaşan perde */
 }
 .card {
   width: 100%; max-width: 420px;
   margin: auto 0; margin-left: clamp(0px, 5vw, 72px);
-  background: rgba(14, 34, 56, .9);
-  border: 3px solid var(--paper); border-radius: 6px;
-  box-shadow: 8px 8px 0 var(--hot);  /* çıkartma gibi duran kırmızı gölge */
+  background: rgba(23, 19, 15, .92);
+  border: 3px solid var(--sea); border-radius: 2px;
+  /* Üstte sarı-siyah tehlike şeridi, altta pas rengi sert gölge. */
+  border-top: 10px solid transparent;
+  border-image: repeating-linear-gradient(-45deg, var(--sun) 0 12px, var(--ink) 12px 24px) 10 0 0 0;
+  box-shadow: 8px 8px 0 var(--hot);
   padding: 22px 22px 20px;
   display: flex; flex-direction: column; gap: 16px;
 }
@@ -248,11 +285,12 @@ button:focus-visible { outline: 3px solid var(--sea); outline-offset: 3px; }
 #resList li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; padding: 6px 10px; border-radius: 5px; background: var(--ink-2); font-size: 15px; }
 #resList li.me { background: var(--sun); color: var(--ink); font-weight: 800; }
 #resList i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; border: 1.5px solid var(--paper); } /* kart rengi noktası */
-#best { margin: 0; font-size: 14px; color: var(--sea); }
+#best, #kills { margin: 0; font-size: 14px; color: var(--sea); }
+#kills { color: var(--sun); font-weight: 800; }
 .btns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* Hareket azaltma ayarı açık olan cihazlarda mesaj animasyonu kapanır. */
-@media (prefers-reduced-motion: reduce) { #msg.pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #msg.pop, #feed div, #hp.crit #hpFill { animation: none; } }
 
 /* ---------- Yatay tutulan telefon (ekran kısa ve geniş) ----------
    Menü kartı iki sütuna bölünür ve her şey biraz küçülür ki kaydırmadan
@@ -275,4 +313,6 @@ button:focus-visible { outline: 3px solid var(--sea); outline-offset: 3px; }
   #pos { font-size: 52px; }
   #item { width: 56px; }
   #map { width: 104px; }
+  #hp span { width: 110px; height: 10px; }
+  #feed div { font-size: 12px; }
 }

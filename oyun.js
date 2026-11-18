@@ -13,13 +13,13 @@
      3. Pist (yolun şekli burada belirlenir)
      4. Zemin, yol, kenar şeritleri, bariyer, başlangıç takı
      5. Hızlandırma pedleri ve eşya kutuları
-     6. Manzara: ağaçlar, dağlar, bulutlar, balonlar
+     6. Manzara: ölü ağaçlar, hurda, kayalıklar, duman, bacalar
      7. Kart modeli (araba + sürücü)
      8. Parçacıklar (kıvılcım, duman, patlama)
      9. Ses
     10. Yarışçılar
     11. Kontroller (klavye, dokunmatik) ve rakiplerin yapay zekâsı
-    12. Eşyalar (nitro, roket, yağ, kalkan)
+    12. Eşyalar (nitro, roket, yağ, kalkan, tamir), zırh ve parçalanma
     13. Fizik: bir kartın hareketi
     14. Ekran göstergeleri ve mini harita
     15. Oyun durumu: menü, geri sayım, yarış, bitiş
@@ -34,6 +34,7 @@
      AIS       -> rakiplerin adları ve renkleri
      TILT_FULL -> telefonu eğerek sürerken direksiyonun hassasiyeti
      TILT_CURVE / TILT_SMOOTH -> eğerek sürüşün yumuşaklığı
+     MAX_HP, ROCKET_DMG, RAM_DMG ... -> zırh ve hasar miktarları
    ===================================================================== */
 
 (function () {
@@ -117,29 +118,31 @@
      =================================================================== */
 
   const scene = new THREE.Scene();
-  const HORIZON = 0xcdeaf8; // ufuk rengi (sis de bu renkte)
+  const HORIZON = 0x4a3428; // ufuk rengi (sis de bu renkte): duman ve pas rengi
 
-  // Gökyüzü: yukarıda koyu mavi, ufka doğru açılan bir renk geçişi.
+  // Gökyüzü: yukarıda isli koyu gri, ufka doğru kızıl-turuncu bir alacakaranlık.
   scene.background = canvasTex(4, 256, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h);
-    gr.addColorStop(0, '#1b78d0');
-    gr.addColorStop(0.38, '#63bdf2');
-    gr.addColorStop(0.56, '#cdeaf8');
-    gr.addColorStop(1, '#cdeaf8');
+    gr.addColorStop(0, '#0f0d10');
+    gr.addColorStop(0.3, '#2a1f1f');
+    gr.addColorStop(0.48, '#7a3b1c');
+    gr.addColorStop(0.56, '#4a3428');
+    gr.addColorStop(1, '#4a3428');
     g.fillStyle = gr;
     g.fillRect(0, 0, w, h);
   });
 
-  // Sis: uzaktaki şeyler ufuk rengine doğru solar (260 birimden başlar, 1500'de tam solar).
-  scene.fog = new THREE.Fog(HORIZON, 260, 1500);
+  // Sis: uzaktaki şeyler ufuk rengine doğru solar (140 birimden başlar, 900'de tam solar).
+  scene.fog = new THREE.Fog(HORIZON, 140, 900);
 
   // Kamera: 68 derece görüş açısı. Son iki sayı en yakın ve en uzak görüş mesafesi.
   const camera = new THREE.PerspectiveCamera(68, 1, 0.6, 2800);
 
   // Işıklar: biri her yeri yumuşakça aydınlatır, diğeri güneş gibi tek yönden vurur.
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7fae6a, 0.95));
-  const sun = new THREE.DirectionalLight(0xfff2d6, 0.75);
-  sun.position.set(120, 220, 60);
+  // Karanlık bir dünya: zayıf, soğuk bir genel ışık ve alçaktan vuran turuncu bir akşam güneşi.
+  scene.add(new THREE.HemisphereLight(0x9a8c86, 0x2a1d14, 0.75));
+  const sun = new THREE.DirectionalLight(0xff9a55, 0.85);
+  sun.position.set(-160, 90, 120);
   scene.add(sun);
 
 
@@ -239,59 +242,83 @@
 
   const ISLAND = 350; // adanın yarıçapı
 
-  // Çim dokusu: yeşil zemin üzerine rastgele açık ve koyu lekeler.
+  // Zemin dokusu: kurumuş, yanık toprak. Koyu kahve üstüne pas ve kurum lekeleri, çatlaklar.
   const grassTex = canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = '#58b356';
+    g.fillStyle = '#3b2c22';
     g.fillRect(0, 0, w, h);
     for (let i = 0; i < 900; i++) {
-      g.fillStyle = R() < 0.5 ? 'rgba(255,255,160,.07)' : 'rgba(0,60,20,.09)';
+      g.fillStyle = R() < 0.4 ? 'rgba(150,70,30,.10)' : R() < 0.7 ? 'rgba(0,0,0,.14)' : 'rgba(200,170,130,.05)';
       const s = 4 + R() * 14;
       g.fillRect(R() * w, R() * h, s, s);
+    }
+    g.strokeStyle = 'rgba(0,0,0,.35)'; // çatlaklar
+    g.lineWidth = 1.5;
+    for (let i = 0; i < 14; i++) {
+      let x = R() * w, y = R() * h;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let j = 0; j < 5; j++) { x += (R() - 0.5) * 40; y += (R() - 0.5) * 40; g.lineTo(x, y); }
+      g.stroke();
     }
   });
   grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
   grassTex.repeat.set(70, 70);
   grassTex.anisotropy = maxAniso;
 
-  // Ada (çim), etrafındaki kumsal ve deniz.
+  // Ada (yanık toprak), etrafındaki çakıl kıyı ve koyu, kirli deniz.
   const island = new THREE.Mesh(new THREE.CircleGeometry(ISLAND, 72), new THREE.MeshBasicMaterial({ map: grassTex }));
   island.rotation.x = -Math.PI / 2;
   scene.add(island);
 
-  const sand = new THREE.Mesh(new THREE.CircleGeometry(ISLAND + 18, 72), new THREE.MeshBasicMaterial({ color: 0xf2dca0 }));
+  const sand = new THREE.Mesh(new THREE.CircleGeometry(ISLAND + 18, 72), new THREE.MeshBasicMaterial({ color: 0x2b2420 }));
   sand.rotation.x = -Math.PI / 2;
   sand.position.y = -0.35;
   scene.add(sand);
 
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(7000, 7000), new THREE.MeshBasicMaterial({ color: 0x2a93d8 }));
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(7000, 7000), new THREE.MeshBasicMaterial({ color: 0x1a2226 }));
   sea.rotation.x = -Math.PI / 2;
   sea.position.y = -1.3;
   scene.add(sea);
 
-  // Yol dokusu: gri asfalt, kenarlarda beyaz çizgi, ortada kesik sarı çizgi.
+  // Yol dokusu: yıpranmış koyu asfalt, yağ lekeleri, çatlaklar ve solmuş çizgiler.
   const tiles = Math.round(LEN / 22); // doku pist boyunca kaç kez tekrarlanacak
   const roadTex = canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = '#484c58';
+    g.fillStyle = '#2c2a2b';
     g.fillRect(0, 0, w, h);
     for (let i = 0; i < 1500; i++) { // asfalt pürüzü için küçük noktalar
-      g.fillStyle = R() < 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.09)';
+      g.fillStyle = R() < 0.5 ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.14)';
       g.fillRect(R() * w, R() * h, 2, 2);
     }
-    g.fillStyle = '#f4f2ea';
+    for (let i = 0; i < 5; i++) { // yağ lekeleri
+      g.fillStyle = 'rgba(0,0,0,.28)';
+      g.beginPath();
+      g.ellipse(30 + R() * (w - 60), R() * h, 8 + R() * 18, 5 + R() * 12, R() * 3, 0, TAU);
+      g.fill();
+    }
+    g.strokeStyle = 'rgba(0,0,0,.5)'; // çatlaklar
+    g.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      let x = 30 + R() * (w - 60), y = R() * h;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let j = 0; j < 4; j++) { x += (R() - 0.5) * 30; y += 8 + R() * 20; g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(214,206,190,.55)';
     g.fillRect(8, 0, 6, h);
     g.fillRect(w - 14, 0, 6, h);
-    g.fillStyle = '#ffd23c';
+    g.fillStyle = 'rgba(232,160,20,.6)';
     g.fillRect(w / 2 - 4, 0, 8, h * 0.5);
   });
   roadTex.wrapT = THREE.RepeatWrapping;
   roadTex.anisotropy = maxAniso;
   scene.add(new THREE.Mesh(ribbon(0, N, HALF_W, -HALF_W, 0.05, i => i / N * tiles), flatMat({ map: roadTex }, 2)));
 
-  // Yolun iki yanındaki kırmızı-beyaz kenar şeritleri.
+  // Yolun iki yanındaki sarı-siyah tehlike şeritleri.
   const kerbTex = canvasTex(16, 64, (g, w, h) => {
-    g.fillStyle = '#e23b2e';
+    g.fillStyle = '#c98a0c';
     g.fillRect(0, 0, w, h / 2);
-    g.fillStyle = '#f6f4ec';
+    g.fillStyle = '#17130f';
     g.fillRect(0, h / 2, w, h / 2);
   });
   kerbTex.wrapT = THREE.RepeatWrapping;
@@ -314,14 +341,30 @@
   chk.repeat.set(1.5, 1);
   scene.add(new THREE.Mesh(ribbon(0, 2, HALF_W, -HALF_W, 0.1, i => i / 2), flatMat({ map: chk }, 5)));
 
-  // Bariyer: pistin iki yanında, kartların daha öteye geçemediği mavi-beyaz alçak duvar.
-  const fenceTex = canvasTex(64, 16, (g, w, h) => {
-    g.fillStyle = '#f6f4ec';
+  // Bariyer: pistin iki yanında, kartların daha öteye geçemediği paslı sac duvar.
+  // Doku: pas lekeli metal levhalar, aralarında birleşim yeri ve perçinler.
+  const fenceTex = canvasTex(128, 64, (g, w, h) => {
+    g.fillStyle = '#5a3a26';
     g.fillRect(0, 0, w, h);
-    g.fillStyle = '#27a4e0';
-    g.fillRect(0, 0, w / 2, h);
-    g.fillStyle = 'rgba(0,0,0,.18)';
-    g.fillRect(0, 0, w, 3);
+    for (let i = 0; i < 260; i++) {
+      g.fillStyle = R() < 0.5 ? 'rgba(170,80,30,.25)' : 'rgba(20,12,8,.25)';
+      const s = 2 + R() * 9;
+      g.fillRect(R() * w, R() * h, s, s * (0.5 + R()));
+    }
+    for (let i = 0; i < 6; i++) { // aşağı akan pas izleri
+      g.fillStyle = 'rgba(140,60,20,.35)';
+      g.fillRect(R() * w, 8, 2 + R() * 3, 20 + R() * 36);
+    }
+    g.fillStyle = 'rgba(0,0,0,.55)'; // levhaların birleşim yeri
+    g.fillRect(0, 0, 3, h);
+    g.fillRect(w / 2, 0, 3, h);
+    g.fillStyle = 'rgba(0,0,0,.45)'; // üst kenar
+    g.fillRect(0, 0, w, 5);
+    g.fillStyle = '#2a1d15';         // perçinler
+    for (const x of [8, w / 2 - 6, w / 2 + 10, w - 8]) {
+      g.fillRect(x, 10, 3, 3);
+      g.fillRect(x, h - 12, 3, 3);
+    }
   });
   fenceTex.wrapS = THREE.RepeatWrapping;
 
@@ -332,7 +375,7 @@
       const x = px[j] + nx[j] * off;
       const z = pz[j] + nz[j] * off;
       pos.push(x, 0, z, x, h, z);
-      uv.push(i / 4, 0, i / 4, 1);
+      uv.push(i / 8, 0, i / 8, 1);
       if (i < N) {
         const k = i * 2;
         idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
@@ -345,8 +388,8 @@
     return g;
   }
   const fenceMat = new THREE.MeshBasicMaterial({ map: fenceTex, side: THREE.DoubleSide });
-  scene.add(new THREE.Mesh(fence(WALL + 1.2, 1.1), fenceMat));
-  scene.add(new THREE.Mesh(fence(-WALL - 1.2, 1.1), fenceMat));
+  scene.add(new THREE.Mesh(fence(WALL + 1.2, 2.2), fenceMat));
+  scene.add(new THREE.Mesh(fence(-WALL - 1.2, 2.2), fenceMat));
 
   // Başlangıç takı: iki direk ve üstünde oyunun adının yazdığı pano.
   // Panodaki yazıyı değiştirmek için aşağıdaki 'FIRTINA KART' yazısını değiştir.
@@ -354,7 +397,7 @@
     const g = new THREE.Group();
     g.position.set(px[0], 0, pz[0]);
     g.rotation.y = hd[0];
-    const poleMat = new THREE.MeshLambertMaterial({ color: 0x0e2238 });
+    const poleMat = new THREE.MeshLambertMaterial({ color: 0x3a2a20 });
     const w = HALF_W + 3;
 
     [-w, w].forEach(x => {
@@ -367,16 +410,31 @@
     g.add(bar);
 
     const t = canvasTex(1024, 128, (c, W, H) => {
-      c.fillStyle = '#0e2238';
+      c.fillStyle = '#17130f';
       c.fillRect(0, 0, W, H);
-      for (let x = 0; x < 6; x++) { // iki uçtaki damalı kısım
-        for (let y = 0; y < 4; y++) {
-          c.fillStyle = (x + y) % 2 ? '#0e2238' : '#fff6e0';
-          c.fillRect(x * 32, y * 32, 32, 32);
-          c.fillRect(W - 192 + x * 32, y * 32, 32, 32);
+      for (let x = -4; x < 12; x++) { // iki uçtaki sarı-siyah çapraz tehlike şeridi
+        c.fillStyle = '#d99a0e';
+        for (const ox of [0, W - 192]) {
+          c.beginPath();
+          c.moveTo(ox + x * 32, H);
+          c.lineTo(ox + x * 32 + 16, H);
+          c.lineTo(ox + x * 32 + 16 + H, 0);
+          c.lineTo(ox + x * 32 + H, 0);
+          c.closePath();
+          c.save();
+          c.beginPath();
+          c.rect(ox, 0, 192, H);
+          c.clip();
+          c.beginPath();
+          c.moveTo(ox + x * 32, H);
+          c.lineTo(ox + x * 32 + 16, H);
+          c.lineTo(ox + x * 32 + 16 + H, 0);
+          c.lineTo(ox + x * 32 + H, 0);
+          c.fill();
+          c.restore();
         }
       }
-      c.fillStyle = '#ffc61a';
+      c.fillStyle = '#e8590c';
       c.font = 'italic 900 84px "Exo 2","Trebuchet MS",sans-serif';
       c.textAlign = 'center';
       c.textBaseline = 'middle';
@@ -402,11 +460,11 @@
      5. HIZLANDIRMA PEDLERİ VE EŞYA KUTULARI
      =================================================================== */
 
-  // Ped dokusu: turuncu zemin üzerinde ileriyi gösteren sarı oklar.
+  // Ped dokusu: koyu metal zemin üzerinde ileriyi gösteren kızgın turuncu oklar.
   const padTex = canvasTex(64, 64, g => {
-    g.fillStyle = '#ff6a1a';
+    g.fillStyle = '#2a1a12';
     g.fillRect(0, 0, 64, 64);
-    g.strokeStyle = '#ffe14a';
+    g.strokeStyle = '#ff7a1a';
     g.lineWidth = 9;
     g.lineJoin = 'miter';
     for (let r = 0; r < 2; r++) {
@@ -428,9 +486,22 @@
     return { i, lane };
   });
 
-  // Eşya kutuları: havada dönen renkli elmaslar. Üstünden geçen kart eşya kazanır.
-  const gemMat = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0x333333, shininess: 90, flatShading: true });
-  const gemGeo = new THREE.OctahedronGeometry(1.15);
+  // Eşya kutuları: havada dönen, kenarları kızgın parlayan ikmal sandıkları.
+  // Üstünden geçen kart eşya kazanır.
+  const crateTex = canvasTex(64, 64, g => {
+    g.fillStyle = '#4a3324';
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = 'rgba(160,80,30,.35)';
+    for (let i = 0; i < 40; i++) g.fillRect(R() * 64, R() * 64, 2 + R() * 6, 2 + R() * 6);
+    g.strokeStyle = '#ffffff'; // kenar çerçevesi (rengi malzemeden gelir, yanıp söner)
+    g.lineWidth = 6;
+    g.strokeRect(3, 3, 58, 58);
+    g.beginPath();             // çapraz destek
+    g.moveTo(6, 6); g.lineTo(58, 58);
+    g.stroke();
+  });
+  const gemMat = new THREE.MeshPhongMaterial({ color: 0xffffff, map: crateTex, emissive: 0x333333, emissiveMap: crateTex, shininess: 20 });
+  const gemGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
   const boxes = [];
   // Dört ayrı yerde, yan yana dörder kutu.
   [110, 290, 450, 585].forEach(i => {
@@ -444,7 +515,7 @@
 
 
   /* ===================================================================
-     6. MANZARA: AĞAÇLAR, DAĞLAR, BULUTLAR, BALONLAR
+     6. MANZARA: ÖLÜ AĞAÇLAR, HURDA, KAYALIKLAR, DUMAN, FABRİKA BACALARI
      =================================================================== */
 
   // Verilen noktanın piste en yakın uzaklığı (ağaçlar yola dikilmesin diye).
@@ -459,7 +530,7 @@
   }
 
   (function () {
-    // 300 ağaç için adada rastgele yer seç, piste çok yakın olanları atla.
+    // 300 süs (ölü ağaç, hurda yığını, varil) için adada rastgele yer seç, piste çok yakın olanları atla.
     const spots = [];
     let guard = 0;
     while (spots.length < 300 && guard++ < 6000) {
@@ -468,8 +539,8 @@
       const x = Math.sin(a) * r, z = Math.cos(a) * r;
       if (trackDist(x, z) > WALL + 5) spots.push([x, z, 0.7 + R() * 0.9, R()]); // [x, z, boyut, rastgele]
     }
-    const pines = spots.filter(s => s[3] < 0.55);  // çam ağaçları (koni)
-    const leafy = spots.filter(s => s[3] >= 0.55); // yapraklı ağaçlar (top)
+    const pines = spots.filter(s => s[3] < 0.55);  // ölü, kurumuş ağaçlar (ince koni)
+    const leafy = spots.filter(s => s[3] >= 0.55); // hurda ve kaya yığınları
 
     const d = new THREE.Object3D();
     const col = new THREE.Color();
@@ -477,7 +548,7 @@
     // InstancedMesh: aynı şekli yüzlerce kez çizmenin hızlı yolu.
     const trunks = new THREE.InstancedMesh(
       new THREE.CylinderGeometry(0.35, 0.5, 3, 6),
-      new THREE.MeshLambertMaterial({ color: 0x7a5230 }),
+      new THREE.MeshLambertMaterial({ color: 0x241a14 }),
       spots.length
     );
     spots.forEach((s, i) => {
@@ -490,7 +561,7 @@
     scene.add(trunks);
 
     const pineMesh = new THREE.InstancedMesh(
-      new THREE.ConeGeometry(2.7, 7, 7),
+      new THREE.ConeGeometry(0.9, 8, 5),
       new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true, shininess: 0 }),
       pines.length
     );
@@ -500,28 +571,54 @@
       d.rotation.set(0, s[3] * 9, 0);
       d.updateMatrix();
       pineMesh.setMatrixAt(i, d.matrix);
-      pineMesh.setColorAt(i, col.setHSL(0.36 + s[3] * 0.08, 0.5, 0.3 + s[2] * 0.06));
+      pineMesh.setColorAt(i, col.setHSL(0.06, 0.25, 0.1 + s[2] * 0.03));
     });
     scene.add(pineMesh);
 
     const leafMesh = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(2.9, 0),
+      new THREE.DodecahedronGeometry(2.6, 0),
       new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true, shininess: 0 }),
       leafy.length
     );
     leafy.forEach((s, i) => {
-      d.position.set(s[0], 4.6 * s[2], s[1]);
-      d.scale.setScalar(s[2]);
+      d.position.set(s[0], 0.6 * s[2], s[1]);
+      d.scale.set(s[2] * 1.3, s[2] * 0.7, s[2]);
       d.rotation.set(s[3] * 5, s[3] * 9, 0);
       d.updateMatrix();
       leafMesh.setMatrixAt(i, d.matrix);
-      leafMesh.setColorAt(i, col.setHSL(0.24 + s[3] * 0.1, 0.6, 0.4 + s[2] * 0.05));
+      // Bazıları pas kırmızısı hurda, bazıları kömür grisi kaya.
+      leafMesh.setColorAt(i, s[3] > 0.8 ? col.setHSL(0.05, 0.55, 0.22) : col.setHSL(0.07, 0.12, 0.16 + s[2] * 0.04));
     });
     scene.add(leafMesh);
 
-    // Uzaktaki karlı dağlar: büyük bir koni + tepesinde beyaz küçük koni.
-    const rockMat = new THREE.MeshPhongMaterial({ color: 0x7389ad, flatShading: true, shininess: 0 });
-    const snowMat = new THREE.MeshPhongMaterial({ color: 0xf5fbff, flatShading: true, shininess: 0 });
+    // Varil yığınları: pistin yakınına ama bariyerin dışına konan paslı variller.
+    const barrelSpots = [];
+    for (let i = 0; i < N; i += 23) {
+      const side = (i / 23) % 2 ? 1 : -1;
+      const off = WALL + 4 + R() * 3;
+      for (let b = 0; b < 3; b++) {
+        barrelSpots.push([px[i] + nx[i] * side * (off + b * 1.3), pz[i] + nz[i] * side * (off + b * 1.3) + (R() - 0.5) * 1.5, R()]);
+      }
+    }
+    const barrels = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.6, 0.6, 1.6, 10),
+      new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      barrelSpots.length
+    );
+    barrelSpots.forEach((b, i) => {
+      d.position.set(b[0], 0.8, b[1]);
+      d.scale.setScalar(1);
+      d.rotation.set(0, 0, b[2] > 0.85 ? Math.PI / 2 : 0); // bazıları devrilmiş
+      if (b[2] > 0.85) d.position.y = 0.6;
+      d.updateMatrix();
+      barrels.setMatrixAt(i, d.matrix);
+      barrels.setColorAt(i, b[2] < 0.4 ? col.setHex(0x6b2a14) : b[2] < 0.7 ? col.setHex(0x8a5a10) : col.setHex(0x2c3a30));
+    });
+    scene.add(barrels);
+
+    // Uzaktaki kara kayalıklar (eski karlı dağların yerinde, tepeleri kor gibi kızıl).
+    const rockMat = new THREE.MeshPhongMaterial({ color: 0x1e1816, flatShading: true, shininess: 0 });
+    const snowMat = new THREE.MeshPhongMaterial({ color: 0x5a1e0e, emissive: 0x2a0800, flatShading: true, shininess: 0 });
     for (let i = 0; i < 13; i++) {
       const a = i / 13 * TAU + R() * 0.3;
       const r = 760 + R() * 380;
@@ -538,10 +635,10 @@
     }
   })();
 
-  // Bulutlar: yan yana birkaç beyaz toptan oluşur, yavaşça kayarlar.
+  // Duman bulutları: yan yana birkaç koyu gri toptan oluşur, yavaşça kayarlar.
   const clouds = [];
   (function () {
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0x2a2220, fog: false });
     const cloudGeo = new THREE.IcosahedronGeometry(1, 1);
     for (let i = 0; i < 16; i++) {
       const g = new THREE.Group();
@@ -552,26 +649,37 @@
         s.scale.set(18 + R() * 12, 9 + R() * 6, 13 + R() * 8);
         g.add(s);
       }
-      g.position.set((R() * 2 - 1) * 1100, 170 + R() * 130, (R() * 2 - 1) * 1100);
+      g.position.set((R() * 2 - 1) * 1100, 120 + R() * 110, (R() * 2 - 1) * 1100);
       scene.add(g);
       clouds.push(g);
     }
   })();
 
-  // Sıcak hava balonları: [renk, x, z]. Sadece süs, yavaşça inip çıkarlar.
-  const balloons = [];
+  // Fabrika bacaları: [x, z, yükseklik]. Tepelerinden sürekli koyu duman tüter,
+  // dibinde kızgın bir ateş ağzı parlar. Sadece süs.
+  const stacks = []; // her bacanın duman topları
   (function () {
-    [[0xff4a2b, -40, 30], [0xffc61a, 120, -20], [0x9b59d6, -200, -40]].forEach(([c, x, z], i) => {
+    const stackMat = new THREE.MeshLambertMaterial({ color: 0x3a2a22 });
+    const bandMat = new THREE.MeshBasicMaterial({ color: 0xb8420e });
+    const smokeMat = new THREE.MeshBasicMaterial({ color: 0x1c1816, transparent: true, opacity: 0.75, depthWrite: false });
+    const smokeGeo = new THREE.IcosahedronGeometry(1, 1);
+    [[-40, 30, 70], [120, -20, 90], [-200, -40, 60], [260, 160, 80], [-280, 200, 75]].forEach(([x, z, h]) => {
       const g = new THREE.Group();
-      const top = new THREE.Mesh(new THREE.SphereGeometry(9, 14, 12), new THREE.MeshLambertMaterial({ color: c }));
-      top.scale.y = 1.2;
-      g.add(top);
-      const basket = new THREE.Mesh(new THREE.BoxGeometry(3, 2.4, 3), new THREE.MeshLambertMaterial({ color: 0x8a5a2b }));
-      basket.position.y = -14;
-      g.add(basket);
-      g.position.set(x, 60 + i * 14, z);
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(4, 6, h, 12), stackMat);
+      tube.position.y = h / 2;
+      g.add(tube);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(4.3, 4.3, 2, 12), bandMat); // tepedeki kızgın halka
+      band.position.y = h - 4;
+      g.add(band);
+      g.position.set(x, 0, z);
       scene.add(g);
-      balloons.push(g);
+      const puffs = [];
+      for (let i = 0; i < 8; i++) {
+        const m = new THREE.Mesh(smokeGeo, smokeMat);
+        g.add(m);
+        puffs.push({ m, t: i / 8 });
+      }
+      stacks.push({ h, puffs });
     });
   })();
 
@@ -614,6 +722,17 @@
     add(new THREE.BoxGeometry(1.9, 0.1, 0.52), accMat, 0, 1.5, -1.32);      // arka kanat
     add(new THREE.BoxGeometry(0.1, 0.62, 0.1), dark, 0.62, 1.18, -1.32);    // arka kanat ayağı (sağ)
     add(new THREE.BoxGeometry(0.1, 0.62, 0.1), dark, -0.62, 1.18, -1.32);   // arka kanat ayağı (sol)
+
+    // --- Zırh ---
+    const steel = M(0x4a4440), rust = M(0x6b3418);
+    add(new THREE.BoxGeometry(2.1, 0.34, 0.22), steel, 0, 0.5, 2.3);        // önde koçbaşı (çarpma tamponu)
+    add(new THREE.BoxGeometry(0.14, 0.5, 0.14), steel, 0.6, 0.62, 2.18);    // koçbaşı dikmesi (sağ)
+    add(new THREE.BoxGeometry(0.14, 0.5, 0.14), steel, -0.6, 0.62, 2.18);   // koçbaşı dikmesi (sol)
+    add(new THREE.BoxGeometry(0.08, 0.5, 1.6), rust, 1.06, 0.62, 0.05);     // yan zırh plakası (sağ)
+    add(new THREE.BoxGeometry(0.08, 0.5, 1.6), rust, -1.06, 0.62, 0.05);    // yan zırh plakası (sol)
+    add(new THREE.BoxGeometry(1.1, 0.08, 0.7), steel, 0, 0.78, 1.0);        // kaput plakası
+    add(new THREE.BoxGeometry(0.16, 0.16, 0.5), dark, 0.28, 0.98, -1.4);    // egzoz (sağ)
+    add(new THREE.BoxGeometry(0.16, 0.16, 0.5), dark, -0.28, 0.98, -1.4);   // egzoz (sol)
 
     // --- Sürücü ---
     add(new THREE.CylinderGeometry(0.3, 0.37, 0.66, 8), accMat, 0, 1.06, -0.3); // gövde
@@ -673,18 +792,23 @@
     shadow.scale.y = 1.35;
     root.add(shadow);
 
-    return { root, body, wheels, pivots, flames, shield };
+    // Gövdedeki bütün malzemeler: hasar alınca kararıp kızarmaları için saklanır.
+    const mats = [];
+    body.traverse(o => { if (o.material && o.material.color && !mats.includes(o.material) && o.material !== flameMat) mats.push(o.material); });
+    mats.forEach(mt => { mt.userData.base = mt.color.getHex(); });
+
+    return { root, body, wheels, pivots, flames, shield, mats };
   }
 
 
   /* ===================================================================
      8. PARÇACIKLAR (KIVILCIM, DUMAN, PATLAMA)
      ===================================================================
-     180 küçük küp önceden hazırlanır. Gerektiğinde sıradaki küp alınır,
+     360 küçük küp önceden hazırlanır. Gerektiğinde sıradaki küp alınır,
      bir yere konur, kısa süre uçup solar. Sonra tekrar kullanılır.
      =================================================================== */
 
-  const PN = 180;
+  const PN = 360;
   const parts = [];
   let partIndex = 0;
 
@@ -736,12 +860,31 @@
     }
   }
 
-  // Patlama: her yöne saçılan 18 turuncu-sarı parçacık.
+  // Küçük patlama (roket çarpınca): her yöne saçılan 18 turuncu-sarı parçacık.
   function explode(x, z) {
     for (let i = 0; i < 18; i++) {
       emit(x, 1, z,
         (Math.random() - 0.5) * 22, 3 + Math.random() * 9, (Math.random() - 0.5) * 22,
         i % 2 ? 0xff7a1a : 0xffe14a, 0.55, 0.55, 1.2, 18);
+    }
+  }
+
+  // Büyük patlama (kart parçalanınca): ateş topu, kara duman ve havaya uçan hurda parçaları.
+  function blast(x, z) {
+    for (let i = 0; i < 22; i++) { // ateş
+      emit(x, 1.2, z,
+        (Math.random() - 0.5) * 26, 4 + Math.random() * 12, (Math.random() - 0.5) * 26,
+        i % 3 ? 0xff6a10 : 0xffd23a, 0.6, 0.55, 1.1, 14);
+    }
+    for (let i = 0; i < 14; i++) { // kara duman
+      emit(x + (Math.random() - 0.5) * 2, 1.5, z + (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 6, 3 + Math.random() * 4, (Math.random() - 0.5) * 6,
+        0x1a1512, 1.3, 0.55, 1.8, 0);
+    }
+    for (let i = 0; i < 10; i++) { // hurda parçaları
+      emit(x, 1, z,
+        (Math.random() - 0.5) * 18, 8 + Math.random() * 10, (Math.random() - 0.5) * 18,
+        i % 2 ? 0x3a3330 : 0x6b3418, 1.4, 0.35, 0, 30);
     }
   }
 
@@ -819,24 +962,36 @@
 
   // Oyuncunun menüde seçebileceği renkler. n: adı, c: renk kodu.
   const PCOLS = [
-    { n: 'Kırmızı', c: 0xe53935 },
-    { n: 'Mavi', c: 0x1e88e5 },
-    { n: 'Yeşil', c: 0x43a047 },
-    { n: 'Sarı', c: 0xfdd835 }
+    { n: 'Kan kırmızısı', c: 0xa3261b },
+    { n: 'Çelik mavisi', c: 0x34557f },
+    { n: 'Asker yeşili', c: 0x55652a },
+    { n: 'Tehlike sarısı', c: 0xc99a12 }
   ];
 
   // Rakipler: [ad, ana renk, ikinci renk]. Adları ve renkleri buradan değiştirebilirsin.
   const AIS = [
-    ['Bora', 0x8e44ad, 0xffd54f],
-    ['Ada', 0xff6fae, 0xffffff],
-    ['Poyraz', 0x00b8a9, 0x0e2238],
-    ['Defne', 0xfb8c00, 0x263238],
-    ['Çınar', 0x795548, 0xffe0b2],
-    ['Lodos', 0xeceff1, 0xe53935],
-    ['Nil', 0x283593, 0x80deea]
+    ['Bora', 0x5e2d6e, 0xb88a1c],
+    ['Ada', 0x8a2f4a, 0x9a9089],
+    ['Poyraz', 0x1f6b63, 0x17130f],
+    ['Defne', 0xb35a12, 0x262220],
+    ['Çınar', 0x5a3a26, 0x8a7a5c],
+    ['Lodos', 0x8e8a84, 0x8f1d14],
+    ['Nil', 0x23305e, 0x5f8a8f]
   ];
 
   const BASE_V = 38; // en yüksek hız (ekranda 3.6 ile çarpılıp km/sa olarak gösterilir)
+
+  // Zırh ve hasar ayarları. Oyunu daha sert ya da daha affedici yapmak için bunlarla oyna.
+  const MAX_HP = 100;      // tam zırh
+  const ROCKET_DMG = 45;   // roket isabeti
+  const OIL_DMG = 12;      // yağa basmak
+  const RAM_MIN = 6;       // bu hızdan yavaş çarpışmalar hasar vermez
+  const RAM_DMG = 2.2;     // çarpışma hasarı (hız farkı başına)
+  const WALL_MIN = 8;      // duvara bu hızdan yavaş sürtünmek hasar vermez
+  const WALL_DMG = 1.1;    // duvar hasarı
+  const REPAIR = 50;       // tamir eşyasının geri verdiği zırh
+  const WRECK_TIME = 2.6;  // parçalanan kartın yeniden doğmasına kadar geçen süre
+  const GHOST_TIME = 2.2;  // yeniden doğunca dokunulmazlık süresi
 
   // Yeni bir yarışçı oluşturur. Aşağıdaki liste bir kartın tuttuğu bütün bilgilerdir.
   function newKart(isPlayer, name, col, acc) {
@@ -874,7 +1029,15 @@
       skill: 1,            // rakibin becerisi (hızını belirler)
       stuck: 0,            // rakip ne kadar süredir takılı
       prog: 0,             // yarışta kat ettiği toplam yol (sıralama için)
-      padT: 0              // pedden yeni geçtiyse bekleme süresi
+      padT: 0,             // pedden yeni geçtiyse bekleme süresi
+      hp: MAX_HP,          // kalan zırh (0 olunca kart parçalanır)
+      wreck: 0,            // parçalandıysa yeniden doğmasına kalan süre
+      ghost: 0,            // yeniden doğduktan sonra dokunulmazlık süresi (yanıp söner)
+      bumpT: 0,            // çarpışma hasarından sonra bekleme (aynı çarpışma iki kez sayılmasın)
+      wallT: 0,            // duvar hasarından sonra bekleme
+      hurtT: 0,            // hasar alınca kısa süre kırmızı parlama
+      kills: 0,            // bu yarışta parçaladığı rakip sayısı
+      charA: -1            // gövdenin şu anki kararma miktarı (gereksiz yere yeniden boyamamak için)
     };
   }
 
@@ -882,7 +1045,7 @@
   let diff = 1; // zorluk: 0 kolay, 1 orta, 2 zor
 
   const karts = AIS.map(a => newKart(false, a[0], a[1], a[2]));
-  const player = newKart(true, 'Sen', PCOLS[0].c, 0xfff6e0);
+  const player = newKart(true, 'Sen', PCOLS[0].c, 0x2e2a26);
   karts.push(player);
   let playerColApplied = 0;
 
@@ -898,6 +1061,7 @@
     k.spin = 0;
     k.spinA = 0;
     k.stuck = 0;
+    k.boost = 0;
   }
 
   // Bütün kartları başlangıç çizgisinin arkasına ikişerli sıralar. Oyuncu en arkadan başlar.
@@ -914,7 +1078,8 @@
         idx: j, lap: 0, lat: 0, speed: 0, drift: 0, chargeT: 0, charge: 0, driftReady: true,
         boost: 0, spin: 0, spinA: 0, shield: 0, item: null, roul: 0, itemDelay: 0,
         hopY: 0, hopV: 0, steerS: 0, finished: false, finishTime: 0, finishOrder: 0,
-        stuck: 0, padT: 0, lane: 3.4 * side, laneT: 2 + Math.random() * 3
+        stuck: 0, padT: 0, lane: 3.4 * side, laneT: 2 + Math.random() * 3,
+        hp: MAX_HP, wreck: 0, ghost: 0, bumpT: 0, wallT: 0, hurtT: 0, kills: 0
       });
       k.x = px[j] + nx[j] * 3.4 * side;
       k.z = pz[j] + nz[j] * 3.4 * side;
@@ -1153,17 +1318,18 @@
 
 
   /* ===================================================================
-     12. EŞYALAR (NİTRO, ROKET, YAĞ, KALKAN)
+     12. EŞYALAR (NİTRO, ROKET, YAĞ, KALKAN, TAMİR), ZIRH VE PARÇALANMA
      =================================================================== */
 
   // Ekrandaki eşya kutusunda görünen küçük çizimler.
   const ICON = {
-    nitro: '<svg viewBox="0 0 48 48"><path d="M27 3 9 27h11l-3 18 20-26H25z" fill="#ffc61a" stroke="#0e2238" stroke-width="2.5" stroke-linejoin="round"/></svg>',
-    rocket: '<svg viewBox="0 0 48 48"><path d="M16 26 8 36h9zM32 26l8 10h-9z" fill="#27a4e0" stroke="#0e2238" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 3c8 7 10 17 8 27H16C14 20 16 10 24 3z" fill="#ff4a2b" stroke="#0e2238" stroke-width="2.5" stroke-linejoin="round"/><circle cx="24" cy="17" r="4" fill="#fff6e0" stroke="#0e2238" stroke-width="2"/><path d="M20 32h8l-4 12z" fill="#ffc61a" stroke="#0e2238" stroke-width="2" stroke-linejoin="round"/></svg>',
-    oil: '<svg viewBox="0 0 48 48"><ellipse cx="24" cy="35" rx="19" ry="8" fill="#2b1e3f" stroke="#0e2238" stroke-width="2.5"/><path d="M24 5c6 9 9 13 9 18a9 9 0 0 1-18 0c0-5 3-9 9-18z" fill="#7a55b8" stroke="#0e2238" stroke-width="2.5" stroke-linejoin="round"/></svg>',
-    shield: '<svg viewBox="0 0 48 48"><path d="M24 4 41 10v13c0 10-7 17-17 21C14 40 7 33 7 23V10z" fill="#6fe3ff" stroke="#0e2238" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 11v26" stroke="#fff6e0" stroke-width="3"/></svg>'
+    nitro: '<svg viewBox="0 0 48 48"><path d="M27 3 9 27h11l-3 18 20-26H25z" fill="#ffc61a" stroke="#17130f" stroke-width="2.5" stroke-linejoin="round"/></svg>',
+    rocket: '<svg viewBox="0 0 48 48"><path d="M16 26 8 36h9zM32 26l8 10h-9z" fill="#27a4e0" stroke="#17130f" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 3c8 7 10 17 8 27H16C14 20 16 10 24 3z" fill="#ff4a2b" stroke="#17130f" stroke-width="2.5" stroke-linejoin="round"/><circle cx="24" cy="17" r="4" fill="#fff6e0" stroke="#17130f" stroke-width="2"/><path d="M20 32h8l-4 12z" fill="#ffc61a" stroke="#17130f" stroke-width="2" stroke-linejoin="round"/></svg>',
+    oil: '<svg viewBox="0 0 48 48"><ellipse cx="24" cy="35" rx="19" ry="8" fill="#2b1e3f" stroke="#17130f" stroke-width="2.5"/><path d="M24 5c6 9 9 13 9 18a9 9 0 0 1-18 0c0-5 3-9 9-18z" fill="#7a55b8" stroke="#17130f" stroke-width="2.5" stroke-linejoin="round"/></svg>',
+    shield: '<svg viewBox="0 0 48 48"><path d="M24 4 41 10v13c0 10-7 17-17 21C14 40 7 33 7 23V10z" fill="#6fe3ff" stroke="#17130f" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 11v26" stroke="#fff6e0" stroke-width="3"/></svg>',
+    repair: '<svg viewBox="0 0 48 48"><path d="M30 5a10 10 0 0 0-9 13L6 33a5 5 0 0 0 7 7l15-15a10 10 0 0 0 13-9l-6 3-5-2-2-5z" fill="#9aa3a0" stroke="#17130f" stroke-width="2.5" stroke-linejoin="round"/><path d="M33 31h10M38 26v10" stroke="#7bd14a" stroke-width="5" stroke-linecap="round"/></svg>'
   };
-  const ITEMS = ['nitro', 'rocket', 'oil', 'shield'];
+  const ITEMS = ['nitro', 'rocket', 'oil', 'shield', 'repair'];
 
   // Kutudan hangi eşyanın çıkacağını seçer. Gerideki kartlara nitro ve roket,
   // öndekilere yağ ve kalkan daha sık çıkar. Birinciye roket çıkmaz.
@@ -1173,7 +1339,8 @@
       nitro: 1 + 2 * back,
       rocket: k.rank === 1 ? 0 : 0.4 + 2.2 * back,
       oil: 1.6 - 1.2 * back,
-      shield: 1.2 - 0.6 * back
+      shield: 1.2 - 0.6 * back,
+      repair: k.hp < 40 ? 2.4 : k.hp < 70 ? 1 : 0.15 // zırhı azaldıkça tamir çıkma ihtimali artar
     };
     let total = 0;
     for (const i of ITEMS) total += weights[i];
@@ -1208,13 +1375,69 @@
     rockets.length = 0;
   }
 
-  // Bir kart vurulunca (roket ya da yağ) olanlar.
-  function hit(k) {
+  // Bir karta hasar verir. by: hasarı veren kart (yoksa null, örneğin duvar).
+  // Zırh biterse kart parçalanır. Kalkan varken hasar işlemez.
+  let shake = 0; // ekran sarsıntısı (oyuncu hasar alınca)
+  function damage(k, amt, by) {
+    if (amt <= 0 || k.wreck > 0 || k.ghost > 0 || k.shield > 0) return;
+    k.hp -= amt;
+    k.hurtT = 0.25;
+    if (k.isPlayer) shake = Math.max(shake, Math.min(0.9, 0.15 + amt / 40));
+    if (k.hp <= 0) wreckKart(k, by);
+  }
+
+  // Kart parçalanır: büyük patlama, eşya kaybolur, birkaç saniye sonra yeniden doğar.
+  function wreckKart(k, by) {
+    k.hp = 0;
+    k.wreck = WRECK_TIME;
+    k.item = null;
+    k.roul = 0;
+    k.drift = 0;
+    k.charge = 0;
+    k.chargeT = 0;
+    k.boost = 0;
+    k.spin = 0;
+    k.spinA = 0;
+    k.hopV = 7; // patlamayla havaya sıçrar
+    blast(k.x, k.z);
+    const near = Math.hypot(k.x - player.x, k.z - player.z);
+    if (near < 90) {
+      tone(70, 0.9, 'sawtooth', 0.25, -40);
+      tone(140, 0.5, 'square', 0.12, -100);
+    }
+    if (by && by !== k) by.kills++;
+    if (state !== 'race') return;
+    if (k.isPlayer) {
+      shake = 1.2;
+      msg('PARÇALANDIN!', 1.6);
+      feed(by ? by.name + ' seni parçaladı' : 'Kartın parçalandı', true);
+    } else if (by === player) {
+      feed(k.name + ' parçalandı · +1', true);
+    } else {
+      feed(by ? by.name + ' → ' + k.name : k.name + ' parçalandı', false);
+    }
+  }
+
+  // Parçalanan kart pistin ortasında, dokunulmaz olarak yeniden doğar.
+  function respawn(k) {
+    resetKart(k);
+    k.hp = MAX_HP;
+    k.ghost = GHOST_TIME;
+    k.hopY = 0;
+    k.hopV = 0;
+    k.m.body.rotation.x = 0;
+  }
+
+  // Bir kart vurulunca (roket ya da yağ) olanlar: hasar alır ve savrulur.
+  function hit(k, by, dmg) {
+    if (k.wreck > 0 || k.ghost > 0) return;
     if (k.shield > 0) { // kalkan varsa darbeyi o yer ve kırılır
       k.shield = 0;
       if (k.isPlayer) tone(520, 0.2, 'triangle', 0.15, 300);
       return;
     }
+    damage(k, dmg, by);
+    if (k.wreck > 0) return; // bu darbeyle parçalandı
     if (k.spin > 0) return; // zaten savruluyorsa tekrar vurulmaz
     k.spin = 1.1;           // 1.1 saniye savrulur
     k.speed *= 0.35;
@@ -1240,6 +1463,17 @@
       // Kalkan: 9 saniye boyunca bir darbeyi engeller.
       k.shield = 9;
       if (k.isPlayer) tone(660, 0.3, 'triangle', 0.14, 300);
+
+    } else if (it === 'repair') {
+      // Tamir: zırhın bir kısmını geri verir.
+      k.hp = Math.min(MAX_HP, k.hp + REPAIR);
+      for (let i = 0; i < 8; i++) {
+        emit(k.x + (Math.random() - 0.5) * 2, 1 + Math.random(), k.z + (Math.random() - 0.5) * 2, 0, 3, 0, 0x7bd14a, 0.6, 0.3, 0, 0);
+      }
+      if (k.isPlayer) {
+        tone(520, 0.12, 'triangle', 0.14);
+        setTimeout(() => tone(780, 0.2, 'triangle', 0.14), 110);
+      }
 
     } else if (it === 'oil') {
       // Yağ: kartın arkasına bırakılır, üstünden geçen savrulur. 30 saniye kalır.
@@ -1282,9 +1516,10 @@
       if (!gone) {
         for (const k of karts) {
           if (h.arm > 0 && k === h.owner) continue;
+          if (k.wreck > 0 || k.ghost > 0) continue;
           const dx = k.x - h.x, dz = k.z - h.z;
           if (dx * dx + dz * dz < 5.3 && k.hopY < 0.15) { // zıplayan kart yağın üstünden atlar
-            hit(k);
+            hit(k, h.owner === k ? null : h.owner, OIL_DMG);
             gone = true;
             break;
           }
@@ -1323,10 +1558,10 @@
 
       let gone = r.life <= 0;
       for (const k of karts) {
-        if (k === r.owner) continue;
+        if (k === r.owner || k.wreck > 0 || k.ghost > 0) continue;
         const dx = k.x - r.x, dz = k.z - r.z;
         if (dx * dx + dz * dz < 6) {
-          hit(k);
+          hit(k, r.owner, ROCKET_DMG);
           gone = true;
           break;
         }
@@ -1352,6 +1587,35 @@
      =================================================================== */
 
   function stepKart(k, inp, dt) {
+    if (k.bumpT > 0) k.bumpT -= dt;
+    if (k.wallT > 0) k.wallT -= dt;
+    if (k.hurtT > 0) k.hurtT -= dt;
+    if (k.ghost > 0) k.ghost -= dt;
+
+    // Parçalanmışsa: enkaz yanarak kayar, durur; süre dolunca yeniden doğar.
+    if (k.wreck > 0) {
+      k.wreck -= dt;
+      k.speed -= k.speed * Math.min(1, 2.5 * dt);
+      k.x += Math.sin(k.va) * k.speed * dt;
+      k.z += Math.cos(k.va) * k.speed * dt;
+      trackPos(k);
+      if (Math.abs(k.lat) > WALL) {
+        const s = Math.sign(k.lat), over = Math.abs(k.lat) - WALL;
+        k.x -= nx[k.idx] * over * s;
+        k.z -= nz[k.idx] * over * s;
+        k.lat = WALL * s;
+      }
+      if (k.hopY > 0 || k.hopV > 0) {
+        k.hopY += k.hopV * dt;
+        k.hopV -= 26 * dt;
+        if (k.hopY <= 0) { k.hopY = 0; k.hopV = 0; }
+      }
+      if (Math.random() < 0.6) emit(k.x + (Math.random() - 0.5), 1, k.z + (Math.random() - 0.5), 0, 4, 0, 0xff6a10, 0.4, 0.5, 1, 0);
+      if (Math.random() < 0.4) emit(k.x, 1.4, k.z, (Math.random() - 0.5) * 2, 5, (Math.random() - 0.5) * 2, 0x1a1512, 1.1, 0.5, 2, 0);
+      if (k.wreck <= 0) respawn(k);
+      return;
+    }
+
     // Savruluyorsa kontrol edilemez.
     if (k.spin > 0) {
       k.spin -= dt;
@@ -1434,9 +1698,18 @@
     k.z += Math.cos(k.va) * k.speed * dt;
     trackPos(k);
 
-    // Bariyere çarptıysa içeri it ve yavaşlat.
+    // Bariyere çarptıysa içeri it ve yavaşlat. Sert çarpış zırha zarar verir.
     if (Math.abs(k.lat) > WALL) {
       const s = Math.sign(k.lat);
+      const into = (Math.sin(k.va) * nx[k.idx] + Math.cos(k.va) * nz[k.idx]) * k.speed * s; // duvara doğru hız
+      if (into > WALL_MIN && k.wallT <= 0) {
+        damage(k, (into - WALL_MIN) * WALL_DMG, null);
+        k.wallT = 0.5;
+        for (let i = 0; i < 6; i++) {
+          emit(k.x, 0.6, k.z, (Math.random() - 0.5) * 8, 2 + Math.random() * 4, (Math.random() - 0.5) * 8, 0xffc23a, 0.3, 0.18, 0, 14);
+        }
+        if (k.isPlayer) tone(110, 0.2, 'square', 0.12, -50);
+      }
       const over = Math.abs(k.lat) - WALL;
       k.x -= nx[k.idx] * over * s;
       k.z -= nz[k.idx] * over * s;
@@ -1449,6 +1722,17 @@
       k.hopY += k.hopV * dt;
       k.hopV -= 26 * dt;
       if (k.hopY <= 0) { k.hopY = 0; k.hopV = 0; }
+    }
+
+    // --- Hasar dumanı: zırh azaldıkça motordan duman, iyice azalınca alev çıkar ---
+    const hpK = k.hp / MAX_HP;
+    if (hpK < 0.5 && Math.random() < (0.5 - hpK) * 1.4) {
+      emit(k.x - Math.sin(k.h) * 1.2, 1.2, k.z - Math.cos(k.h) * 1.2,
+        (Math.random() - 0.5) * 1.5, 2.5, (Math.random() - 0.5) * 1.5,
+        hpK < 0.25 ? 0x1a1512 : 0x5a524c, 0.8, 0.45, 2.2, 0);
+    }
+    if (hpK < 0.25 && Math.random() < 0.35) {
+      emit(k.x - Math.sin(k.h) * 1.1, 1.1, k.z - Math.cos(k.h) * 1.1, 0, 2, 0, 0xff6a10, 0.25, 0.35, 0.5, 0);
     }
 
     // --- Hızlandırma pedleri ---
@@ -1514,11 +1798,34 @@
   }
 
   // Kartın hesaplanan durumunu 3B modele aktarır (konum, yön, tekerlekler, alev, kalkan).
+  const CHAR = new THREE.Color(0x120c08); // yanmış metal rengi
+  const HURT = new THREE.Color(0xff3010); // hasar alınca parlama rengi
   function syncVisual(k, dt) {
     const m = k.m;
     m.root.position.set(k.x, 0, k.z);
     m.root.rotation.y = k.h + k.spinA;
     m.body.position.y = k.hopY;
+
+    // Zırh azaldıkça gövde kararır; parçalanınca kömür gibi olur; vurulunca bir an kızarır.
+    const charA = k.wreck > 0 ? 0.85 : (1 - k.hp / MAX_HP) * 0.55;
+    const flash = k.hurtT > 0 ? 1 : 0;
+    const key = Math.round(charA * 40) + flash * 100;
+    if (key !== k.charA) {
+      k.charA = key;
+      for (const mt of m.mats) {
+        mt.color.setHex(mt.userData.base).lerp(CHAR, charA);
+        if (flash) mt.color.lerp(HURT, 0.5);
+      }
+    }
+    // Enkaz yana yatmış durur. Yeniden doğunca kart bir süre yanıp söner.
+    m.body.rotation.x = k.wreck > 0 ? -0.22 : 0;
+    m.root.visible = !(k.ghost > 0 && Math.floor(k.ghost * 12) % 2);
+    if (k.wreck > 0) {
+      m.body.rotation.z = 0.55;
+      for (const f of m.flames) f.visible = false;
+      m.shield.visible = false;
+      return;
+    }
 
     // Virajda ve driftte gövde hafifçe yana yatar.
     const rollTarget = k.steerS * 0.05 * (k.speed / BASE_V) + k.drift * 0.09;
@@ -1547,9 +1854,27 @@
         const dx = b.x - a.x, dz = b.z - a.z;
         const q = dx * dx + dz * dz;
         if (q < 4.6 && q > 1e-4) {
+          if (a.ghost > 0 || b.ghost > 0) continue; // yeni doğan kart içinden geçilebilir
           const d = Math.sqrt(q);
           const push = (2.15 - d) / 2;
           const ux = dx / d, uz = dz / d;
+
+          // Çarpışma hasarı: birbirine doğru hız ne kadar yüksekse o kadar hasar.
+          // Daha hızlı dalan taraf (koçbaşıyla vuran) hasarın çoğunu karşıya verir.
+          const sa = (Math.sin(a.va) * ux + Math.cos(a.va) * uz) * a.speed;    // a'nın b'ye doğru hızı
+          const sb = -(Math.sin(b.va) * ux + Math.cos(b.va) * uz) * b.speed;   // b'nin a'ya doğru hızı
+          const closing = sa + sb;
+          if (closing > RAM_MIN && a.bumpT <= 0 && b.bumpT <= 0 && !a.wreck && !b.wreck) {
+            const dmg = (closing - RAM_MIN) * RAM_DMG;
+            const fa = Math.max(0, sa) / (Math.max(0, sa) + Math.max(0, sb) + 1e-6);
+            damage(b, dmg * (0.3 + 0.7 * fa), a);
+            damage(a, dmg * (0.3 + 0.7 * (1 - fa)), b);
+            a.bumpT = b.bumpT = 0.45;
+            for (let s = 0; s < 8; s++) {
+              emit(a.x + ux * 1.1, 0.8, a.z + uz * 1.1, (Math.random() - 0.5) * 10, 2 + Math.random() * 5, (Math.random() - 0.5) * 10, 0xffc23a, 0.3, 0.2, 0, 14);
+            }
+            if (a.isPlayer || b.isPlayer) tone(95 + Math.random() * 30, 0.22, 'square', 0.16, -40);
+          }
           a.x -= ux * push; a.z -= uz * push;
           b.x += ux * push; b.z += uz * push;
           const avg = (a.speed + b.speed) / 2; // hızları biraz birbirine yaklaşır
@@ -1593,14 +1918,14 @@
       if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]);
     }
     g.closePath();
-    g.strokeStyle = 'rgba(14,34,56,.85)'; // koyu dış çizgi
+    g.strokeStyle = 'rgba(10,8,6,.9)'; // koyu dış çizgi
     g.lineWidth = 17;
     g.stroke();
-    g.strokeStyle = '#fff6e0';            // açık renk yol
+    g.strokeStyle = '#b9aa95';            // açık renk yol
     g.lineWidth = 8;
     g.stroke();
     const s = mapF(px[0], pz[0]);         // başlangıç çizgisi işareti
-    g.fillStyle = '#ff4a2b';
+    g.fillStyle = '#e8590c';
     g.fillRect(s[0] - 3, s[1] - 10, 6, 20);
   })();
 
@@ -1616,7 +1941,7 @@
       mapG.fillStyle = hex(k.col);
       mapG.fill();
       mapG.lineWidth = 2;
-      mapG.strokeStyle = '#0e2238';
+      mapG.strokeStyle = '#17130f';
       mapG.stroke();
     }
     const p = mapF(player.x, player.z);
@@ -1651,7 +1976,18 @@
 
   // Ekrandaki sıra, tur, süre, hız ve eşya göstergelerini günceller.
   // Değişmeyen şeyleri boşuna yeniden yazmamak için son değerler saklanır.
-  let hudRank = 0, hudLap = 0, hudItem = '', rouI = 0, rouT = 0;
+  let hudRank = 0, hudLap = 0, hudItem = '', rouI = 0, rouT = 0, hudHp = -1;
+
+  // Sağdaki olay akışı ("Bora parçalandı" gibi). Yazılar 3 saniye sonra kaybolur.
+  function feed(text, mine) {
+    const el = document.createElement('div');
+    el.textContent = text;
+    if (mine) el.className = 'mine';
+    const box = $('feed');
+    box.prepend(el);
+    while (box.children.length > 4) box.lastChild.remove();
+    setTimeout(() => el.remove(), 3200);
+  }
   function updateHud(dt) {
     if (player.rank !== hudRank) {
       hudRank = player.rank;
@@ -1665,10 +2001,19 @@
     $('time').textContent = fmt(player.finished ? player.finishTime : raceTime);
     $('spd').textContent = Math.round(Math.abs(player.speed) * 3.6);
 
+    // Zırh çubuğu: doluluk ve renk (sağlam: sarı, azalınca turuncu, kritik: kırmızı ve yanıp söner).
+    const hpP = Math.max(0, Math.round(player.hp));
+    if (hpP !== hudHp) {
+      hudHp = hpP;
+      $('hpFill').style.width = hpP + '%';
+      $('hp').className = hpP < 25 ? 'crit' : hpP < 55 ? 'low' : '';
+    }
+    $('hurt').style.opacity = player.hurtT > 0 ? Math.min(1, player.hurtT * 4) : player.wreck > 0 ? 0.6 : 0;
+
     let it = player.item || '';
     if (player.roul > 0) { // eşya çarkı dönerken eşyalar hızla değişir
       rouT -= dt;
-      if (rouT <= 0) { rouT = 0.08; rouI = (rouI + 1) % 4; }
+      if (rouT <= 0) { rouT = 0.08; rouI = (rouI + 1) % ITEMS.length; }
       it = ITEMS[rouI];
     }
     if (it !== hudItem) {
@@ -1699,6 +2044,7 @@
   let time = 0;                  // oyun açıldığından beri geçen süre (animasyonlar için)
   let orbitA = 0;                // menüde kameranın adanın etrafındaki açısı
   let camA = 0, camFov = 68;     // yarışta kameranın açısı ve görüş genişliği
+  let camD = 8.6, camH = 4.1;    // kameranın karta uzaklığı ve yüksekliği
   let wrongT = 0;                // ne kadar süredir ters yönde gidiliyor
   let doneT = 0;                 // bitişten beri geçen süre
   let resShown = false, resTick = 0;
@@ -1708,7 +2054,7 @@
     if (playerColApplied === pcol) return;
     scene.remove(player.m.root);
     player.col = PCOLS[pcol].c;
-    player.m = makeKart(player.col, 0xfff6e0);
+    player.m = makeKart(player.col, 0x2e2a26);
     scene.add(player.m.root);
     playerColApplied = pcol;
   }
@@ -1735,9 +2081,14 @@
     doneT = 0;
     resShown = false;
     hudRank = hudLap = 0;
+    hudHp = -1;
+    shake = 0;
+    $('feed').innerHTML = '';
     hudItem = 'x';
     camA = player.h;
     camFov = 68;
+    camD = 8.6;
+    camH = 4.1;
     touch.auto = isTouch;
 
     $('menu').hidden = true;
@@ -1782,6 +2133,9 @@
       '<span><i style="background:' + hex(k.col) + '"></i>' + k.name + '</span>' +
       '<span>' + (k.finished ? fmt(k.finishTime) : 'yarışıyor') + '</span></li>'
     ).join('');
+    $('kills').textContent = player.kills
+      ? 'Parçaladığın rakip: ' + player.kills
+      : 'Bu yarışta kimseyi parçalamadın.';
 
     if (!resShown) {
       resShown = true;
@@ -1814,8 +2168,7 @@
     time += dt;
 
     // --- Dünyadaki süs animasyonları ---
-    gemMat.color.setHSL((time * 0.25) % 1, 0.9, 0.6);     // eşya kutuları renk değiştirir
-    gemMat.emissive.setHSL((time * 0.25) % 1, 0.9, 0.25);
+    gemMat.emissive.setHSL(0.07, 1, 0.22 + 0.16 * Math.sin(time * 5)); // sandıkların kenarları kor gibi yanıp söner
     for (const b of boxes) {
       if (b.t > 0) {
         b.t -= dt;
@@ -1829,7 +2182,14 @@
       c.position.x += dt * 3;
       if (c.position.x > 1200) c.position.x = -1200;
     }
-    balloons.forEach((b, i) => { b.position.y = 62 + i * 14 + Math.sin(time * 0.5 + i * 2) * 4; });
+    // Baca dumanları: yükselir, büyür, sürüklenir ve baştan başlar.
+    for (const st of stacks) {
+      for (const pf of st.puffs) {
+        pf.t = (pf.t + dt * 0.12) % 1;
+        pf.m.position.set(pf.t * 30, st.h + 2 + pf.t * 40, pf.t * 8);
+        pf.m.scale.setScalar(5 + pf.t * 16);
+      }
+    }
 
     if (msgT > 0) {
       msgT -= dt;
@@ -1902,7 +2262,7 @@
             }
           }
           // 2.5 saniyeden uzun takılı kalırsa yolun ortasına geri konur.
-          if (Math.abs(k.speed) < 4 && k.spin <= 0) {
+          if (Math.abs(k.speed) < 4 && k.spin <= 0 && k.wreck <= 0) {
             k.stuck += dt;
             if (k.stuck > 2.5) resetKart(k);
           } else {
@@ -1981,11 +2341,18 @@
       const k = player;
       if (state === 'done') camA += dt * 0.5;
       else camA += angDiff(k.va + angDiff(k.h, k.va) * 0.4, camA) * Math.min(1, dt * 6);
+      // Hasar alınca ekran sarsılır.
+      shake = Math.max(0, shake - dt * 2.2);
+      const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
       // Hızlandıkça ve turboda görüş açısı genişler (hız hissi verir).
       camFov += ((66 + (k.boost > 0 ? 13 : 0) + Math.max(0, k.speed) * 0.14) - camFov) * Math.min(1, dt * 4);
       camera.fov = camFov;
-      const dist = state === 'done' ? 11 : 8.6; // kameranın karta uzaklığı
-      camera.position.set(k.x - Math.sin(camA) * dist, 4.1, k.z - Math.cos(camA) * dist);
+      // Kameranın karta uzaklığı: bitişte ve kart parçalanınca geri ve yukarı çekilir (enkaz görünsün).
+      const wantD = state === 'done' ? 11 : k.wreck > 0 ? 13 : 8.6;
+      const wantH = k.wreck > 0 ? 7.5 : 4.1;
+      camD += (wantD - camD) * Math.min(1, dt * 3);
+      camH += (wantH - camH) * Math.min(1, dt * 3);
+      camera.position.set(k.x - Math.sin(camA) * camD + sx, camH + sy, k.z - Math.cos(camA) * camD);
       camera.lookAt(k.x + Math.sin(camA) * 5, 1.7, k.z + Math.cos(camA) * 5);
     }
     camera.updateProjectionMatrix();
@@ -2067,7 +2434,7 @@
   // Test yardımcıları: oyunu denemek için dışarıdan erişim sağlar, oyunu etkilemez.
   // (auto = true yapılırsa oyuncunun kartını da bilgisayar sürer.)
   window.__kart = {
-    karts, player, keys, tilt, playerInput, auto: false,
+    karts, player, keys, tilt, playerInput, auto: false, damage,
     get state() { return state; },
     startRace,
     step(n, dt) {
